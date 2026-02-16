@@ -1,236 +1,270 @@
-# SIDESA - Village Population Information System
-Authoritative Technical Specification
-Version 1.0
+# SIDESA – Village Population Information System
+Authoritative Backend Specification
+Version 2.0 (Production Strict Mode)
+
+This document supersedes previous informal specifications.
+
+This is NOT a learning project.
+This is NOT a demo.
+This is a production-grade administrative system.
+
+All implementation must follow this document strictly.
+Any deviation is considered a violation.
 
 ---
 
-## 1. PROJECT OVERVIEW
+# 1. CORE PHILOSOPHY
 
-SIDESA is a web-based Village Population Information System.
+SIDESA is a secure, role-based, audit-safe administrative backend.
 
-This system must be:
-- Production-ready
-- Modular
-- Strictly typed (TypeScript strict mode)
-- Clean architecture
-- Scalable
-- Deployment-ready (Render)
+The system must be:
 
-No shortcuts.
-No monolithic messy file.
-No business logic inside routes.
+- Strictly layered
+- Domain-driven
+- Concurrency-safe
+- Audit-consistent
+- Privilege-secured
+- Transactionally correct
+- Production-deployable
+
+Security and data integrity take priority over convenience.
 
 ---
 
-## 2. TECH STACK (FIXED)
+# 2. TECHNOLOGY STACK (NON-NEGOTIABLE)
 
 Backend:
 - Node.js
 - Express
-- TypeScript (strict)
+- TypeScript (strict: true)
 - Prisma ORM
 - PostgreSQL
-- JWT Authentication
+- JWT (1 hour expiry)
 - Bcrypt
 
-Frontend:
-- React
-- TypeScript
-- Vite
-- Axios
-- React Router
-- Chart.js
-
 Deployment:
-- Backend → Render
-- Frontend → Vercel
-- Database → Supabase PostgreSQL
+- Render (backend)
+- Supabase PostgreSQL (database)
+
+No alternative stacks.
+No raw SQL outside Prisma.
+No ORM replacement.
+No micro-framework improvisation.
 
 ---
 
-## 3. ARCHITECTURE PRINCIPLES
+# 3. CLEAN ARCHITECTURE (STRICT)
 
-### Clean Architecture Rules
+Layer separation is mandatory.
 
-- Routes only define endpoints.
-- Controllers handle request/response.
-- Services contain business logic.
-- Prisma only accessed inside services.
-- No raw SQL outside Prisma.
-- No business logic inside controllers.
-- No direct database access inside routes.
+Routes:
+- Define endpoints only.
+- No business logic.
+- No Prisma access.
+- No data mutation.
 
----
+Controllers:
+- Parse request.
+- Call service.
+- Return response.
+- No business logic.
+- No validation logic.
+- No Prisma access.
 
-## 4. ROLE SYSTEM
+Services:
+- Contain ALL business logic.
+- The ONLY layer allowed to access Prisma.
+- Must enforce domain rules.
+- Must enforce role rules.
+- Must handle transactions.
 
-Roles:
-- ADMIN
-- RT
-- KEPALA_DESA
+Middlewares:
+- Authentication
+- Role authorization
+- Input validation
 
-Permissions:
-
-ADMIN:
-- Full CRUD all entities
-- Approve/reject surat
-
-RT:
-- Create surat
-- Create penduduk
-- Cannot delete data permanently
-
-KEPALA_DESA:
-- Approve or reject surat
-- View all reports
-- Cannot modify penduduk
-
-Must enforce via middleware.
+Violation of layering is a critical error.
 
 ---
 
-## 5. DATABASE SCHEMA (STRICT)
+# 4. DATABASE MODELS (FIXED – NO ADDITIONS)
 
-### User
-- id: UUID (primary)
-- name: string
-- email: string (unique)
-- password: string (hashed)
-- role: enum (ADMIN, RT, KEPALA_DESA)
-- createdAt: DateTime
+Models allowed:
 
-### KartuKeluarga
-- id: UUID
-- no_kk: string (unique)
-- alamat: string
-- rt: string
-- rw: string
-- createdAt: DateTime
+- User
+- KartuKeluarga
+- Penduduk
+- Surat
+- AuditLog
 
-### Penduduk
-- id: UUID
-- nik: string (unique, 16 chars validation)
-- nama: string
-- tanggalLahir: DateTime
-- jenisKelamin: enum (LAKI_LAKI, PEREMPUAN)
-- pekerjaan: string
-- status: enum (AKTIF, PINDAH, MENINGGAL)
-- kkId: relation
-- createdAt: DateTime
+No extra models.
+No soft delete columns.
+No status flags beyond defined ones.
+No hidden helper tables.
+
+---
+
+# 5. DOMAIN RULES (HARD ENFORCEMENT)
+
+These rules MUST be enforced inside service layer.
+
+### NIK
+- Exactly 16 digits
+- Numeric only
+- Immutable once created
+
+### no_kk
+- Exactly 16 digits
+- Numeric only
+
+### Email
+- Valid format
+- Unique
 
 ### Surat
-- id: UUID
-- nomorSurat: string (auto-generated)
-- jenis: enum (DOMISILI, TIDAK_MAMPU)
-- status: enum (PENDING, APPROVED, REJECTED)
-- pendudukId: relation
-- createdBy: relation (User)
-- createdAt: DateTime
+- Only PENDING can be approved/rejected
+- RT cannot approve their own surat
+- Approved surat cannot be modified
+- NomorSurat must be unique
+- NomorSurat must follow format XXX/SIDESA/MM/YYYY
+- Counter resets monthly
 
 ### AuditLog
-- id: UUID
-- userId: UUID
-- action: string
-- tableName: string
-- recordId: UUID
-- createdAt: DateTime
+Every:
+- CREATE
+- UPDATE
+- DELETE
+Must create AuditLog entry within same transaction.
 
 ---
 
-## 6. NOMOR SURAT FORMAT
+# 6. ROLE SYSTEM (DUAL-LAYER ENFORCEMENT)
+
+Role rules must be enforced BOTH in:
+- Middleware
+- Service layer
+
+## ADMIN
+- Full CRUD all entities
+- Approve/reject surat
+- Create users
+- Assign roles
+
+## RT
+- Create penduduk
+- Create surat
+- Cannot delete data permanently
+- Cannot approve own surat
+- Cannot create ADMIN users
+
+## KEPALA_DESA
+- Approve/reject surat
+- View reports
+- Cannot modify penduduk
+- Cannot modify KK
+- Cannot create users
+
+Service layer must never trust route-only enforcement.
+
+---
+
+# 7. NOMOR SURAT (CRITICAL CONCURRENCY LOGIC)
 
 Format:
 XXX/SIDESA/MM/YYYY
 
-Example:
-001/SIDESA/02/2026
+Rules:
+- 3-digit zero padded
+- Reset monthly
+- Query only current month/year
+- Must be generated inside transaction
+- Must be concurrency-safe
 
-Must auto-increment monthly reset.
+Acceptable implementation:
+- Use Prisma transaction
+- Re-query inside transaction
+- Retry on unique constraint failure
+OR
+- Use SERIALIZABLE isolation
 
----
-
-## 7. SECURITY REQUIREMENTS
-
-- Password hashed with bcrypt
-- JWT expires in 1 hour
-- Role-based middleware
-- Input validation using middleware
-- Error handling centralized
-- No stack trace exposed in production
-
----
-
-## 8. FOLDER STRUCTURE (MANDATORY)
-
-src/
- ├── controllers/
- ├── services/
- ├── routes/
- ├── middlewares/
- ├── utils/
- ├── prisma/
- ├── config/
- ├── app.ts
- └── server.ts
+Generating nomorSurat outside transaction is prohibited.
 
 ---
 
-## 9. API ENDPOINT STRUCTURE
+# 8. SECURITY REQUIREMENTS
 
-Auth:
-POST /api/auth/register
-POST /api/auth/login
+- Password hashed with bcrypt (min salt 10)
+- JWT expiry exactly 1 hour
+- JWT secret from environment variable
+- No stack trace in production
+- Centralized error handler
+- No privilege escalation via register
+- Only ADMIN can create ADMIN user
 
-Penduduk:
-GET /api/penduduk
-GET /api/penduduk/:id
-POST /api/penduduk
-PUT /api/penduduk/:id
-DELETE /api/penduduk/:id
-
-Kartu Keluarga:
-GET /api/kk
-POST /api/kk
-PUT /api/kk/:id
-
-Surat:
-GET /api/surat
-POST /api/surat
-PUT /api/surat/:id/approve
-PUT /api/surat/:id/reject
+Register endpoint must not allow arbitrary role assignment.
 
 ---
 
-## 10. VALIDATION RULES
+# 9. TRANSACTION POLICY
 
-- NIK must be 16 digits
-- no_kk must be 16 digits
-- Email must be valid format
-- Cannot delete approved surat
-- Cannot approve own surat (if role RT)
+All CUD operations must:
 
----
+- Run inside Prisma $transaction
+- Include AuditLog creation
+- Be atomic
 
-## 11. AUDIT LOG RULE
-
-Every:
-- Create
-- Update
-- Delete
-Must generate AuditLog record.
+No partial success allowed.
 
 ---
 
-## 12. DEPLOYMENT REQUIREMENTS
+# 10. VALIDATION POLICY
 
-Must:
-- Use environment variables
-- Use PORT from process.env
-- Be ready for Render
-- Provide example .env
+Validation must exist in:
+
+- Middleware (input shape & format)
+- Service layer (domain enforcement)
+
+Service layer must not rely solely on middleware.
+
+---
+
+# 11. DEPLOYMENT READINESS
+
+Must include:
+
+- .env.example
+- Prisma migration instructions
+- Seed script for initial ADMIN
+- Graceful shutdown
+- Production build script
+
+---
+
+# 12. FORBIDDEN PRACTICES
+
+- Business logic inside controllers
+- Prisma usage outside services
+- Generating IDs manually
+- Catching and swallowing database errors silently
+- Using try/catch to hide constraint violations
+- Allowing client-controlled privilege escalation
+
+---
+
+# 13. VALIDATOR CHECKLIST
+
+Before approval, verify:
+
+- No layer violation
+- All domain rules enforced in service
+- Role rules enforced in service
+- NomorSurat concurrency-safe
+- AuditLog atomic
+- No privilege escalation
+- No missing constraints
+
+If any item fails → system rejected.
 
 ---
 
 END OF SPECIFICATION
-This document is authoritative.
-Do not invent features outside this specification.
