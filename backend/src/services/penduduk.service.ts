@@ -1,4 +1,4 @@
-import { HubunganKeluarga, JenisKelamin, Role, StatusPenduduk } from '@prisma/client';
+import { HubunganKeluarga, JenisKelamin, JenisMutasi, Role, StatusPenduduk } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
 import prisma from '../prisma/client';
 import { AppError } from '../utils/AppError';
@@ -52,6 +52,17 @@ const ALLOWED_TRANSITIONS: Record<StatusPenduduk, StatusPenduduk[]> = {
   [StatusPenduduk.AKTIF]: [StatusPenduduk.PINDAH, StatusPenduduk.MENINGGAL],
   [StatusPenduduk.PINDAH]: [StatusPenduduk.AKTIF, StatusPenduduk.MENINGGAL],
   [StatusPenduduk.MENINGGAL]: [],
+};
+
+/**
+ * Maps a valid (from → to) status transition to the corresponding JenisMutasi.
+ * Key format: "FROM:TO"
+ */
+const TRANSITION_TO_MUTASI: Record<string, JenisMutasi> = {
+  [`${StatusPenduduk.AKTIF}:${StatusPenduduk.PINDAH}`]: JenisMutasi.KELUAR,
+  [`${StatusPenduduk.AKTIF}:${StatusPenduduk.MENINGGAL}`]: JenisMutasi.MENINGGAL,
+  [`${StatusPenduduk.PINDAH}:${StatusPenduduk.AKTIF}`]: JenisMutasi.MASUK,
+  [`${StatusPenduduk.PINDAH}:${StatusPenduduk.MENINGGAL}`]: JenisMutasi.MENINGGAL,
 };
 
 function validateStatusTransition(from: StatusPenduduk, to: StatusPenduduk): void {
@@ -159,6 +170,15 @@ export async function create(data: CreatePendudukInput, userId: string) {
         kkId: data.kkId,
       },
       include: { kartuKeluarga: true },
+    });
+
+    await tx.mutasiPenduduk.create({
+      data: {
+        pendudukId: penduduk.id,
+        jenisMutasi: JenisMutasi.MASUK,
+        tanggalMutasi: new Date(),
+        createdById: userId,
+      },
     });
 
     await tx.auditLog.create({
@@ -275,10 +295,18 @@ export async function update(id: string, data: UpdatePendudukInput, userId: stri
       include: { kartuKeluarga: true },
     });
 
-    // TODO: When MutasiPenduduk is implemented, create mutation record here
-    // inside this transaction for any status change (data.status !== existing.status).
-    // The MutasiPenduduk type maps: AKTIF→PINDAH=KELUAR, AKTIF→MENINGGAL=MENINGGAL,
-    // PINDAH→AKTIF=MASUK, PINDAH→MENINGGAL=MENINGGAL.
+    // Create MutasiPenduduk for actual status transitions (not no-ops)
+    if (data.status && data.status !== existing.status) {
+      const jenisMutasi = TRANSITION_TO_MUTASI[`${existing.status}:${data.status}`];
+      await tx.mutasiPenduduk.create({
+        data: {
+          pendudukId: penduduk.id,
+          jenisMutasi,
+          tanggalMutasi: new Date(),
+          createdById: userId,
+        },
+      });
+    }
 
     await tx.auditLog.create({
       data: {

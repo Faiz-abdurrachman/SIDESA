@@ -47,6 +47,13 @@ enum HubunganKeluarga {
   LAINNYA
 }
 
+enum JenisMutasi {
+  MASUK
+  KELUAR
+  LAHIR
+  MENINGGAL
+}
+
 model User {
   id        String   @id @default(uuid())
   name      String
@@ -55,10 +62,35 @@ model User {
   role      Role
   createdAt DateTime @default(now()) @map("created_at")
 
-  suratCreated Surat[]
-  auditLogs    AuditLog[]
+  suratCreated    Surat[]
+  mutasiCreated   MutasiPenduduk[]
+  auditLogs       AuditLog[]
 
   @@map("users")
+}
+
+model Rw {
+  id        String    @id @default(uuid())
+  nomorRw   String    @unique @map("nomor_rw")
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  rt Rt[]
+
+  @@map("rw")
+}
+
+model Rt {
+  id        String    @id @default(uuid())
+  nomorRt   String    @map("nomor_rt")
+  rwId      String    @map("rw_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  rw Rw @relation(fields: [rwId], references: [id])
+
+  @@unique([nomorRt, rwId])
+  @@map("rt")
 }
 
 model KartuKeluarga {
@@ -90,6 +122,7 @@ model Penduduk {
 
   kartuKeluarga KartuKeluarga @relation(fields: [kkId], references: [id])
   surat         Surat[]
+  mutasi        MutasiPenduduk[]
 
   @@map("penduduk")
 }
@@ -107,6 +140,22 @@ model Surat {
   createdBy User     @relation(fields: [createdById], references: [id])
 
   @@map("surat")
+}
+
+model MutasiPenduduk {
+  id            String       @id @default(uuid())
+  pendudukId    String       @map("penduduk_id")
+  jenisMutasi   JenisMutasi  @map("jenis_mutasi")
+  tanggalMutasi DateTime     @map("tanggal_mutasi")
+  keterangan    String?
+  createdById   String       @map("created_by_id")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  deletedAt     DateTime?    @map("deleted_at")
+
+  penduduk  Penduduk @relation(fields: [pendudukId], references: [id])
+  createdBy User     @relation(fields: [createdById], references: [id])
+
+  @@map("mutasi_penduduk")
 }
 
 model AuditLog {
