@@ -35,6 +35,18 @@ enum StatusSurat {
   REJECTED
 }
 
+enum HubunganKeluarga {
+  KEPALA_KELUARGA
+  ISTRI
+  ANAK
+  MENANTU
+  CUCU
+  ORANG_TUA
+  MERTUA
+  FAMILI_LAIN
+  LAINNYA
+}
+
 model User {
   id        String   @id @default(uuid())
   name      String
@@ -50,12 +62,13 @@ model User {
 }
 
 model KartuKeluarga {
-  id        String   @id @default(uuid())
-  noKk      String   @unique @map("no_kk")
+  id        String    @id @default(uuid())
+  noKk      String    @unique @map("no_kk")
   alamat    String
   rt        String
   rw        String
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
 
   penduduk Penduduk[]
 
@@ -69,9 +82,11 @@ model Penduduk {
   tanggalLahir DateTime       @map("tanggal_lahir")
   jenisKelamin JenisKelamin   @map("jenis_kelamin")
   pekerjaan    String
-  status       StatusPenduduk @default(AKTIF)
-  kkId         String         @map("kk_id")
-  createdAt    DateTime       @default(now()) @map("created_at")
+  status             StatusPenduduk   @default(AKTIF)
+  hubunganKeluarga   HubunganKeluarga? @map("hubungan_keluarga")
+  kkId               String           @map("kk_id")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  deletedAt          DateTime?        @map("deleted_at")
 
   kartuKeluarga KartuKeluarga @relation(fields: [kkId], references: [id])
   surat         Surat[]

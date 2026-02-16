@@ -6,6 +6,10 @@ const DIGIT_16 = /^\d{16}$/;
 const VALID_ROLES = ['ADMIN', 'RT', 'KEPALA_DESA'];
 const VALID_JENIS_KELAMIN = ['LAKI_LAKI', 'PEREMPUAN'];
 const VALID_STATUS_PENDUDUK = ['AKTIF', 'PINDAH', 'MENINGGAL'];
+const VALID_HUBUNGAN_KELUARGA = [
+  'KEPALA_KELUARGA', 'ISTRI', 'ANAK', 'MENANTU', 'CUCU',
+  'ORANG_TUA', 'MERTUA', 'FAMILI_LAIN', 'LAINNYA',
+];
 const VALID_JENIS_SURAT = ['DOMISILI', 'TIDAK_MAMPU'];
 
 function requireFields(body: Record<string, unknown>, fields: string[]): void {
@@ -54,7 +58,7 @@ export function validateLogin(req: Request, _res: Response, next: NextFunction):
 }
 
 export function validatePenduduk(req: Request, _res: Response, next: NextFunction): void {
-  requireFields(req.body, ['nik', 'nama', 'tanggalLahir', 'jenisKelamin', 'pekerjaan', 'kkId']);
+  requireFields(req.body, ['nik', 'nama', 'tanggalLahir', 'jenisKelamin', 'pekerjaan', 'kkId', 'hubunganKeluarga']);
 
   if (!DIGIT_16.test(req.body.nik)) {
     throw new AppError('NIK must be exactly 16 digits', 400);
@@ -62,6 +66,12 @@ export function validatePenduduk(req: Request, _res: Response, next: NextFunctio
   if (!VALID_JENIS_KELAMIN.includes(req.body.jenisKelamin)) {
     throw new AppError(
       `Invalid jenisKelamin. Must be one of: ${VALID_JENIS_KELAMIN.join(', ')}`,
+      400,
+    );
+  }
+  if (!VALID_HUBUNGAN_KELUARGA.includes(req.body.hubunganKeluarga)) {
+    throw new AppError(
+      `Invalid hubunganKeluarga. Must be one of: ${VALID_HUBUNGAN_KELUARGA.join(', ')}`,
       400,
     );
   }
@@ -82,6 +92,12 @@ export function validatePendudukUpdate(req: Request, _res: Response, next: NextF
   if (req.body.status && !VALID_STATUS_PENDUDUK.includes(req.body.status)) {
     throw new AppError(
       `Invalid status. Must be one of: ${VALID_STATUS_PENDUDUK.join(', ')}`,
+      400,
+    );
+  }
+  if (req.body.hubunganKeluarga && !VALID_HUBUNGAN_KELUARGA.includes(req.body.hubunganKeluarga)) {
+    throw new AppError(
+      `Invalid hubunganKeluarga. Must be one of: ${VALID_HUBUNGAN_KELUARGA.join(', ')}`,
       400,
     );
   }
