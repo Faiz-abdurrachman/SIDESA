@@ -87,7 +87,8 @@ model Rt {
   createdAt DateTime  @default(now()) @map("created_at")
   deletedAt DateTime? @map("deleted_at")
 
-  rw Rw @relation(fields: [rwId], references: [id])
+  rw             Rw              @relation(fields: [rwId], references: [id])
+  kartuKeluarga  KartuKeluarga[]
 
   @@unique([nomorRt, rwId])
   @@map("rt")
@@ -99,9 +100,11 @@ model KartuKeluarga {
   alamat    String
   rt        String
   rw        String
+  rtId      String?   @map("rt_id")
   createdAt DateTime  @default(now()) @map("created_at")
   deletedAt DateTime? @map("deleted_at")
 
+  rtEntity Rt?        @relation(fields: [rtId], references: [id], onDelete: Restrict)
   penduduk Penduduk[]
 
   @@map("kartu_keluarga")
